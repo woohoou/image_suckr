@@ -3,39 +3,56 @@ module ImageSuckr
   class GoogleSuckr
     attr_accessor :default_params
 
-    def initialize(default_params = {})
-      @default_params = {
-        :rsz => "8",
-        #"as_filetype" => "png",
-        #"imgc" => "color",
-        #"imgcolor" => "black",
-        #"imgsz" => "medium",
-        #"imgtype" => "photo",
-        #"safe" => "active",
-        :v => "1.0"
-      }.merge(default_params)
+    def initialize(options = {})
+      options.reverse_merge!({
+        rsz: '8',
+        imgsz: 'xxlarge',
+        v: '1.0',
+        imgtype: 'photo',
+        safe: 'active',
+        q: '',
+        salt: false
+      })
+
+      @default_params = options
     end
 
-    def get_image_url(params = {})
-      params = @default_params.merge(params)
-      params["q"] = rand(1000).to_s if params["q"].nil?
+    def get_image_url options={}
+      get_images_url(options).sample
+    end
+
+    def get_images_url options={}
+      response_data = get_data options
+      response_data["results"].map {|result| result["url"] }
+    end
+
+    def get_last_start options={}
+      response_data = get_data options
+      response_data["cursor"]["pages"].last["start"]
+    end
+
+
+    def get_image_content options={}
+      Net::HTTP.get_response(URI.parse(get_image_url(options))).body
+    end
+    
+    def get_image_file options={}
+      open(URI.parse(get_image_url(options)))
+    end
+
+    private
+
+    def get_data options={}
+      params = @default_params.merge(options)
+      params[:q] = params[:q]+' '+(params[:salt].is_a?(Fixnum) ? params[:salt] : rand(99999)).to_s if params[:salt].present?
+
+      params = Hash[params.map{ |k,v| [k.to_s, v] }]
 
       url = "http://ajax.googleapis.com/ajax/services/search/images?" + params.to_query
 
       resp = Net::HTTP.get_response(URI.parse(url))
       result = JSON.parse(resp.body)
-      response_data = result["responseData"]
-
-      result_size = response_data["results"].count
-      result["responseData"]["results"][rand(result_size)]["url"]
-    end
-
-    def get_image_content(params = {})
-      Net::HTTP.get_response(URI.parse(get_image_url(params))).body
-    end
-    
-    def get_image_file(params = {})
-      open(URI.parse(get_image_url(params)))
+      result["responseData"]
     end
 
   end
